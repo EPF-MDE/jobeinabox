@@ -2,7 +2,7 @@
 # With thanks to David Bowes (d.h.bowes@lancaster.ac.uk) who did all the hard work
 # on this originally.
 
-FROM docker.io/ubuntu:22.04
+FROM docker.io/ubuntu:22.04 as base
 
 # https://github.com/opencontainers/image-spec/blob/master/annotations.md
 LABEL \
@@ -40,8 +40,10 @@ RUN ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && \
         acl \
         apache2 \
         build-essential \
+	ca-certificates \
         fp-compiler \
         git \
+	gnupg \
         libapache2-mod-php \
         nano \
         nodejs \
@@ -55,6 +57,7 @@ RUN ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && \
         python3-pip \
         python3-setuptools \
         sqlite3 \
+	wget\
         sudo \
         tzdata \
         unzip && \
@@ -78,8 +81,7 @@ RUN ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && \
     chown -R ${APACHE_RUN_USER}:${APACHE_RUN_GROUP} /var/www/html && \
     apt-get -y autoremove --purge && \
     apt-get -y clean && \
-    rm -rf /var/lib/apt/lists/*
-
+    rm -rf /var/lib/apt/lists/*     
 # Expose apache
 EXPOSE 80
 
@@ -89,3 +91,21 @@ HEALTHCHECK --interval=5m --timeout=2s \
 
 # Start apache
 CMD ["/usr/sbin/apache2ctl", "-D", "FOREGROUND"]
+
+# Thalitadru from here
+
+# copy pip requirements and install
+COPY requirements.txt /tmp/
+COPY requirements-pytorch.txt /tmp/
+RUN ln -sf /usr/bin/python3 /usr/bin/python && \
+    python -m pip install --no-cache-dir -r /tmp/requirements.txt && \
+    export TF_CPP_MIN_LOG_LEVEL=3 && \
+    python -m pip install --no-cache-dir -r /tmp/requirements-pytorch.txt 
+# prevent tensorflow warnings
+ENV TF_CPP_MIN_LOG_LEVEL=3
+
+# thalitadru: test package install
+COPY test-python-packages.sh /tmp/
+RUN chmod +x /tmp/test-python-packages.sh && ./tmp/test-python-packages.sh
+
+
