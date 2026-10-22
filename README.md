@@ -50,13 +50,12 @@ want to raise this number. To do so, exec a shell in the container with a comman
     docker exec -it jobe bash
 
  and then:
- but does not have a mysql server installed so cannot use API-key access. For normal use, that's not a problem - API-key access is relevant only to Jobe servers delivering services to multiple client
-    apt update; apt install nano
-    nano  /var/www/html/jobe/application/config/config.php
+
+    nano  /var/www/html/jobe/app/Config/Jobe.php
 
 Find the line
 
-    $config['jobe_max_users'] = 8;
+    public int $jobe_max_users = 8;
 
 and change the value from 8 to the number of cores on your machine, or to a higher
 value if you expect to run mainly I/O-bound jobs.
@@ -72,6 +71,28 @@ You can check the performance of the container with the command
 
     docker exec -it jobe /var/www/html/jobe/testsubmit.py --perf
 
+## Using API Keys
+
+You can provide API keys during the image build via the `--secret` option.
+
+The keys can be stored in a separate file, following the format:
+
+```
+'c1425880-2289-4b76-ae29-bcea34997256' => 0,
+'de7970e6-0466-4ce2-a6a4-c1a51363bd03' => 90
+```
+
+You can find more information on API keys in the Jobe documentation.
+
+With the following command the keys stored in a file called `api_keys` in the
+jobeinabox directory are automatically added to `/var/www/html/jobe/app/Config/Jobe.php`
+and the option `$require_api_keys` is set to true.
+
+```
+podman build . -t my/jobeinabox --secret id=api_keys,src=api_keys
+```
+
+If no API keys are provided the configuration remains untouched.
 
 ### Warnings:
 
@@ -80,24 +101,42 @@ You can check the performance of the container with the command
 
 ## Using jobeinabox
 
+### Initial sanity check
 Having started a jobeinabox container by either of the above methods, you
 can check it's running OK by browsing to
 
      http://[host_running_docker]:4000/jobe/index.php/restapi/languages
 
-and you should get a JSON-encoded list of the supported languages, namely
+and you should get a JSON-encoded list of the supported languages, something like
+(depending on OS version):
 
     [["c","7.3.0"],["cpp","7.3.0"],["java","10.0.2"],["nodejs","8.10.0"],["octave","4.2.2"],["pascal","3.0.4"],["php","7.2.7"],["python3","3.6.5"]]
+    
+### Running the test suite
 
 If you wish to run the test suite within the container, use the command
 
     sudo docker exec -t jobe /usr/bin/python3 /var/www/html/jobe/testsubmit.py
+    
+### Configuring Moodle to use JobeInABox
 
-To set your Moodle/CodeRunner plugin to use this dockerised Jobe server, set the Jobe server field in the CodeRunner admin settings (Site Administration > Plugins > Question types > CodeRunner) to
+To set your Moodle/CodeRunner plugin to use this dockerised Jobe server,
+set the Jobe server field in the CodeRunner admin settings (Site Administration > Plugins > Question types > CodeRunner) to
 
     [host_running_docker]:4000
 
 Do not put http:// at the start.
+
+In addition you will need to:
+
+1.  Add the port number 4000 to the cURL allowed ports list in the HTTP security
+    settings for the Moodle server (in Site administration > Security)
+    
+1.  If you're running JobeInABox on the same host as your Moodle server
+    (not recommended) you will have to additionally remove *localhost*
+    and *127.0.0.0/8* from the cURL blocked hosts list.
+    
+### Stopping JobeInABox
 
 To stop the running server, enter the command:
 
@@ -121,5 +160,26 @@ To check if there is anything left, enter the command
 
 1.  Rebuild the container regularly to ensures that it is running
     with the latest jobe version and security updates.
+
+## Change history (recent changes only)
+
+2/10/26
+ * Upgrade base image to Ubuntu 26.04. Brings in OpenJDK 25, Python 3.14, PHP 8.5 among others.
+
+3/9/26:
+ * Fix error in build that changed ownership of all files including the critical
+   runguard executable to www-data. If the server was compromised and a user
+   obtained www-data level accessw, that build error allowed them to further 
+   escalate to root.
+   
+8/6/26:
+ * Update README.md to include required Moodle security settings (allowed ports,
+   disallowed URLs).
+   
+18/10/24:
+ * API key configuration can now be specified during build using Docker's "--secret" functionality (thanks @theLogicJB).
+
+ * Fix broken documentation on changing the number of Jobe servers.
+
 
 
